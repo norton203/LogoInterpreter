@@ -1,0 +1,349 @@
+﻿@page "/"
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+<PageTitle>Logo Interpreter</PageTitle>
+
+<div class="single">
+    <div id="topbar" class="panel">
+        <h1>Logo Interpreter</h1>
+        <p id="topbar-links">
+            <a href="#" @onclick="ShowTests">Tests</a>
+            | <a href="https://github.com/inexorabletash/jslogo" target="_blank">Source</a>
+            | <a href="#" @onclick="ShowLanguageReference">Language Reference</a>
+        </p>
+    </div>
+
+    <div id="content-container">
+        <div id="display" class="panel">
+            <div id="overlay"></div>
+            <canvas id="sandbox" width="500" height="350"></canvas>
+
+            <div id="input" class="panel">
+                <div class="single-line">
+                    <textarea @ref="inputElement" @onkeydown="HandleKeyDown" placeholder="Type Logo commands here..."></textarea>
+                    <button @onclick="ExecuteCommand" class="btn btn-primary">Run</button>
+                    <button @onclick="ClearScreen" class="btn btn-secondary">Clear</button>
+                </div>
+
+                @if (isMultiLine)
+                {
+                    <div class="multi-line">
+                        <textarea @ref="multiLineElement" @bind="multiLineInput" rows="10" cols="60"></textarea>
+                        <div class="button-group">
+                            <button @onclick="ExecuteMultiLine" class="btn btn-primary">Run All</button>
+                            <button @onclick="ToggleSingleLine" class="btn btn-secondary">Single Line</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <button @onclick="ToggleMultiLine" class="btn btn-outline-secondary btn-sm">Multi-line</button>
+                }
+            </div>
+
+            <div id="output" class="panel">
+                @foreach (var line in outputLines)
+                {
+                    <div class="output-line @(line.IsError ? "error" : "")">@line.Text</div>
+                }
+            </div>
+        </div>
+
+        <div id="sidebar-container">
+            <div id="sidebar-buttons" class="panel">
+                <ul>
+                    <li>
+                        <a href="#" @onclick="() => ShowSidebarContent(SidebarContent.Reference)"
+                           class="@(currentSidebar == SidebarContent.Reference ? "active" : "")">Reference</a>
+                    </li>
+                    <li>
+                        <a href="#" @onclick="() => ShowSidebarContent(SidebarContent.Library)"
+                           class="@(currentSidebar == SidebarContent.Library ? "active" : "")">Library</a>
+                    </li>
+                    <li>
+                        <a href="#" @onclick="() => ShowSidebarContent(SidebarContent.History)"
+                           class="@(currentSidebar == SidebarContent.History ? "active" : "")">History</a>
+                    </li>
+                    <li>
+                        <a href="#" @onclick="() => ShowSidebarContent(SidebarContent.Examples)"
+                           class="@(currentSidebar == SidebarContent.Examples ? "active" : "")">Examples</a>
+                    </li>
+                    <li>
+                        <a href="#" @onclick="() => ShowSidebarContent(SidebarContent.Links)"
+                           class="@(currentSidebar == SidebarContent.Links ? "active" : "")">Links</a>
+                    </li>
+                </ul>
+            </div>
+
+            <div id="sidebar" class="panel">
+                @switch (currentSidebar)
+                {
+                    case SidebarContent.Reference:
+                        <iframe src="language.html" class="reference-frame"></iframe>
+                        break;
+
+                    case SidebarContent.Library:
+                        <div class="sidebar-content">
+                            <div class="sidebar-header">
+                                <button @onclick="ClearLibrary" class="btn btn-sm btn-outline-danger">Clear Library</button>
+                            </div>
+                            <div class="snippets">
+                                @foreach (var procedure in libraryProcedures)
+                                {
+                                    <div class="snippet" @onclick="() => LoadProcedure(procedure)">
+                                        <pre>@procedure</pre>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        break;
+
+                    case SidebarContent.History:
+                        <div class="sidebar-content">
+                            <div class="sidebar-header">
+                                <button @onclick="ClearHistory" class="btn btn-sm btn-outline-danger">Clear History</button>
+                            </div>
+                            <div class="snippets">
+                                @foreach (var command in commandHistory)
+                                {
+                                    <div class="snippet" @onclick="() => LoadCommand(command)">
+                                        <pre>@command</pre>
+                                    </div>
+                                }
+                                @if (!commandHistory.Any())
+                                {
+                                    <div class="placeholder">Commands you enter will appear here so you can find, modify, and re-run them.</div>
+                                }
+                            </div>
+                        </div>
+                        break;
+
+                    case SidebarContent.Examples:
+                        <div class="sidebar-content">
+                            <div class="snippets">
+                                @foreach (var example in logoExamples)
+                                {
+                                    <div class="snippet" @onclick="() => LoadExample(example.Code)">
+                                        <h4>@example.Title</h4>
+                                        <pre>@example.Code</pre>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        break;
+
+                    case SidebarContent.Links:
+                        <div class="sidebar-content">
+                            <ul class="links-list">
+                                <li><a href="https://en.wikipedia.org/wiki/Logo_(programming_language)" target="_blank">Logo</a> according to Wikipedia</li>
+                                <li><a href="https://utdallas.edu/~veerasam/logo/" target="_blank">UT Dallas LOGO Workshop</a> - fun examples to try</li>
+                                <li><a href="http://el.media.mit.edu/logo-foundation/" target="_blank">The Logo Foundation</a> with links to learning resources</li>
+                                <li><a href="https://www.cs.berkeley.edu/~bh/logo.html" target="_blank">Berkeley Logo (UCBLogo)</a> is a well respected interpreter</li>
+                            </ul>
+                        </div>
+                        break;
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private ElementReference inputElement;
+    private ElementReference multiLineElement;
+    private string currentInput = "";
+    private string multiLineInput = "";
+    private bool isMultiLine = false;
+    private List<OutputLine> outputLines = new();
+    private List<string> commandHistory = new();
+    private List<string> libraryProcedures = new();
+    private SidebarContent currentSidebar = SidebarContent.Examples;
+
+    private IJSObjectReference? logoModule;
+    private IJSObjectReference? turtleModule;
+
+    private enum SidebarContent
+    {
+        Reference,
+        Library,
+        History,
+        Examples,
+        Links
+    }
+
+    private class OutputLine
+    {
+        public string Text { get; set; } = "";
+        public bool IsError { get; set; } = false;
+    }
+
+    private class LogoExample
+    {
+        public string Title { get; set; } = "";
+        public string Code { get; set; } = "";
+    }
+
+    private List<LogoExample> logoExamples = new()
+    {
+        new() { Title = "Simple Star", Code = "to star repeat 5 [ fd 100 rt 144 ] end\nstar" },
+        new() { Title = "Square Pattern", Code = "to square :length repeat 4 [ fd :length rt 90 ] end\nrepeat 36 [ square 50 rt 10 ]" },
+        new() { Title = "Colorful Squares", Code = "to randomcolor setcolor pick [ red orange yellow green blue violet ] end\nrepeat 36 [ randomcolor square random 200 rt 10 ]" },
+        new() { Title = "Spiral Text", Code = "window pu repeat 72 [ setlabelheight repcount fd repcount * 2.5 label \"Logo bk repcount * 2.5 rt 10 ]" },
+        new() { Title = "Flower Pattern", Code = "repeat 36 [ fd 50 rt 170 ]" },
+        new() { Title = "Tree Fractal", Code = "to tree :size\n  if :size < 5 [ stop ]\n  fd :size\n  rt 30\n  tree :size * 0.7\n  lt 60\n  tree :size * 0.7\n  rt 30\n  bk :size\nend\ntree 100" }
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            logoModule = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/logo-interop.js");
+            await logoModule.InvokeVoidAsync("initializeLogo");
+            await inputElement.FocusAsync();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey && !isMultiLine)
+        {
+            await ExecuteCommand();
+        }
+    }
+
+    private async Task ExecuteCommand()
+    {
+        var command = currentInput.Trim();
+        if (string.IsNullOrEmpty(command)) return;
+
+        commandHistory.Insert(0, command);
+        if (commandHistory.Count > 100) // Keep last 100 commands
+        {
+            commandHistory.RemoveAt(commandHistory.Count - 1);
+        }
+
+        try
+        {
+            var result = await logoModule!.InvokeAsync<string>("executeCommand", command);
+            if (!string.IsNullOrEmpty(result))
+            {
+                outputLines.Add(new OutputLine { Text = result });
+            }
+        }
+        catch (Exception ex)
+        {
+            outputLines.Add(new OutputLine { Text = ex.Message, IsError = true });
+        }
+
+        currentInput = "";
+        StateHasChanged();
+
+        // Scroll to bottom of output
+        await JSRuntime.InvokeVoidAsync("scrollToBottom", "output");
+    }
+
+    private async Task ExecuteMultiLine()
+    {
+        var commands = multiLineInput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var command in commands)
+        {
+            currentInput = command.Trim();
+            if (!string.IsNullOrEmpty(currentInput))
+            {
+                await ExecuteCommand();
+            }
+        }
+        multiLineInput = "";
+    }
+
+    private void ToggleMultiLine()
+    {
+        isMultiLine = true;
+        StateHasChanged();
+    }
+
+    private void ToggleSingleLine()
+    {
+        isMultiLine = false;
+        StateHasChanged();
+    }
+
+    private async Task ClearScreen()
+    {
+        outputLines.Clear();
+        await logoModule!.InvokeVoidAsync("clearCanvas");
+        StateHasChanged();
+    }
+
+    private void ShowSidebarContent(SidebarContent content)
+    {
+        currentSidebar = content;
+        StateHasChanged();
+    }
+
+    private void LoadCommand(string command)
+    {
+        currentInput = command;
+        StateHasChanged();
+    }
+
+    private void LoadProcedure(string procedure)
+    {
+        if (isMultiLine)
+        {
+            multiLineInput = procedure;
+        }
+        else
+        {
+            ToggleMultiLine();
+            multiLineInput = procedure;
+        }
+        StateHasChanged();
+    }
+
+    private void LoadExample(string example)
+    {
+        if (isMultiLine)
+        {
+            multiLineInput = example;
+        }
+        else
+        {
+            ToggleMultiLine();
+            multiLineInput = example;
+        }
+        StateHasChanged();
+    }
+
+    private void ClearHistory()
+    {
+        commandHistory.Clear();
+        StateHasChanged();
+    }
+
+    private void ClearLibrary()
+    {
+        libraryProcedures.Clear();
+        StateHasChanged();
+    }
+
+    private void ShowTests()
+    {
+        // Implementation for showing tests
+    }
+
+    private void ShowLanguageReference()
+    {
+        currentSidebar = SidebarContent.Reference;
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (logoModule != null)
+        {
+            await logoModule.DisposeAsync();
+        }
+    }
+}
