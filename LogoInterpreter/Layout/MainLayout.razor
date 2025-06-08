@@ -1,7 +1,104 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="page">
-    <main>
-        @Body
-    </main>
-</div>
+<MudThemeProvider Theme="@_theme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@ToggleDrawer" />
+        
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.Code" Size="Size.Large" />
+            <MudText Typo="Typo.h6" Class="mud-text-primary">Logo Interpreter</MudText>
+        </MudStack>
+        
+        <MudSpacer />
+        
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+            <MudIconButton Icon="@Icons.Material.Filled.Download" 
+                          Color="Color.Inherit" 
+                          Title="Export Canvas" />
+            <MudIconButton Icon="@Icons.Material.Filled.Share" 
+                          Color="Color.Inherit" 
+                          Title="Share" />
+            <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" 
+                          Color="Color.Inherit" 
+                          OnClick="@ToggleTheme" 
+                          Title="Toggle Theme" />
+            <MudIconButton Icon="@Icons.Material.Filled.Info" 
+                          Color="Color.Inherit" 
+                          Title="About" />
+        </MudStack>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="@_drawerOpen" 
+               ClipMode="DrawerClipMode.Always" 
+               Elevation="2"
+               Variant="@DrawerVariant.Mini"
+               OpenMiniOnHover="true">
+        <MudNavMenu>
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">
+                Home
+            </MudNavLink>
+            <MudNavLink Href="/examples" Icon="@Icons.Material.Filled.Article">
+                Examples
+            </MudNavLink>
+            <MudNavLink Href="/reference" Icon="@Icons.Material.Filled.MenuBook">
+                Reference
+            </MudNavLink>
+            <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Settings">
+                Settings
+            </MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.False" Class="pa-0" Style="height: calc(100vh - 64px);">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = false;
+    private bool _isDarkMode = false;
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight()
+        {
+            Primary = "#2196F3",
+            Secondary = "#FF9800",
+            AppbarBackground = "#2196F3",
+            Background = "#F5F5F5",
+            Surface = "#FFFFFF",
+            DrawerBackground = "#FFFFFF",
+            DrawerText = "rgba(0,0,0, 0.87)",
+            Success = "#4CAF50"
+        },
+        PaletteDark = new PaletteDark()
+        {
+            Primary = "#2196F3",
+            Secondary = "#FF9800",
+            AppbarBackground = "#1976D2",
+            Background = "#121212",
+            Surface = "#1E1E1E",
+            DrawerBackground = "#1E1E1E",
+            DrawerText = "rgba(255,255,255, 0.87)",
+            Success = "#4CAF50"
+        }
+    };
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private void ToggleTheme()
+    {
+        _isDarkMode = !_isDarkMode;
+       // _theme.PaletteLight = _isDarkMode ? _theme.PaletteDark : _theme.PaletteLight;
+        StateHasChanged();
+    }
+}

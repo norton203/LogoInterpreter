@@ -1,0 +1,229 @@
+﻿@* Components/LogoToolbar.razor - MudBlazor version *@
+
+<MudStack Spacing="3">
+    <!-- Quick Actions -->
+    <MudPaper Class="pa-3" Elevation="1">
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">
+                <MudIcon Icon="@Icons.Material.Filled.FlashOn" Size="Size.Small" Class="mr-2" />
+                Quick Actions
+            </MudText>
+            
+            <MudGrid Spacing="1">
+                <MudItem xs="6">
+                    <MudButton Variant="Variant.Outlined" 
+                              Size="Size.Small" 
+                              StartIcon="@Icons.Material.Filled.ArrowForward"
+                              OnClick="@(() => OnCommandClick.InvokeAsync("fd 50"))"
+                              FullWidth="true">
+                        FD 50
+                    </MudButton>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudButton Variant="Variant.Outlined" 
+                              Size="Size.Small" 
+                              StartIcon="@Icons.Material.Filled.RotateRight"
+                              OnClick="@(() => OnCommandClick.InvokeAsync("rt 90"))"
+                              FullWidth="true">
+                        RT 90
+                    </MudButton>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudButton Variant="Variant.Outlined" 
+                              Size="Size.Small" 
+                              StartIcon="@Icons.Material.Filled.RotateLeft"
+                              OnClick="@(() => OnCommandClick.InvokeAsync("lt 90"))"
+                              FullWidth="true">
+                        LT 90
+                    </MudButton>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudButton Variant="Variant.Outlined" 
+                              Size="Size.Small" 
+                              StartIcon="@Icons.Material.Filled.Home"
+                              OnClick="@(() => OnCommandClick.InvokeAsync("home"))"
+                              FullWidth="true">
+                        HOME
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudStack>
+    </MudPaper>
+
+    <!-- Colors -->
+    <MudPaper Class="pa-3" Elevation="1">
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">
+                <MudIcon Icon="@Icons.Material.Filled.Palette" Size="Size.Small" Class="mr-2" />
+                Colors
+            </MudText>
+            
+            <MudGrid Spacing="1">
+                @foreach (var color in colors)
+                {
+                    <MudItem xs="3">
+                        <MudIconButton Icon="@Icons.Material.Filled.Circle"
+                                      Style="@GetColorStyle(color.Value)"
+                                      Size="Size.Medium"
+                                      OnClick="@(() => SetColor(color.Key))"
+                                      Title="@($"Set color to {color.Key}")" />
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudStack>
+    </MudPaper>
+
+    <!-- Shapes -->
+    <MudPaper Class="pa-3" Elevation="1">
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">
+                <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Small" Class="mr-2" />
+                Shapes
+            </MudText>
+            
+            <MudGrid Spacing="1">
+                <MudItem xs="6">
+                    <MudButton Variant="Variant.Text" 
+                              Size="Size.Small" 
+                              StartIcon="@Icons.Material.Filled.CropSquare"
+                              OnClick="@(() => OnCommandClick.InvokeAsync("repeat 4 [ fd 50 rt 90 ]"))"
+                              FullWidth="true">
+                        Square
+                    </MudButton>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudButton Variant="Variant.Text" 
+                              Size="Size.Small" 
+                              StartIcon="@Icons.Material.Filled.Details"
+                              OnClick="@(() => OnCommandClick.InvokeAsync("repeat 3 [ fd 50 rt 120 ]"))"
+                              FullWidth="true">
+                        Triangle
+                    </MudButton>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudButton Variant="Variant.Text" 
+                              Size="Size.Small" 
+                              StartIcon="@Icons.Material.Filled.Hexagon"
+                              OnClick="@(() => OnCommandClick.InvokeAsync("repeat 6 [ fd 50 rt 60 ]"))"
+                              FullWidth="true">
+                        Hexagon
+                    </MudButton>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudButton Variant="Variant.Text" 
+                              Size="Size.Small" 
+                              StartIcon="@Icons.Material.Filled.Circle"
+                              OnClick="@(() => OnCommandClick.InvokeAsync("circle 50"))"
+                              FullWidth="true">
+                        Circle
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudStack>
+    </MudPaper>
+
+    <!-- Pen Control -->
+    <MudPaper Class="pa-3" Elevation="1">
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">
+                <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="mr-2" />
+                Pen Control
+            </MudText>
+            
+            <MudStack Spacing="2">
+                <MudToggleIconButton @bind-Toggled="isPenDown"
+                                    Icon="@Icons.Material.Filled.Edit" 
+                                    ToggledIcon="@Icons.Material.Filled.EditOff"
+                                    Color="@(isPenDown ? Color.Success : Color.Default)"
+                                    ToggledColor="Color.Warning"
+                                    OnToggledChanged="TogglePen"
+                                    Title="@(isPenDown ? "Pen Down" : "Pen Up")" />
+                
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                    <MudText Typo="Typo.caption">Size:</MudText>
+                    <MudSlider Value="penSize"
+                              Min="1"
+                              Max="10"
+                              Step="1"
+                              Immediate="true"
+                              ValueChanged="@((int value)=>OnPenSizeChanged(value))"
+                              Color="Color.Primary"
+                              Style="flex: 1;" />
+                    <MudChip T="int" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">
+                        @penSize
+                    </MudChip>
+                </MudStack>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    <!-- Advanced Controls -->
+    <MudPaper Class="pa-3" Elevation="1">
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">
+                <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" Class="mr-2" />
+                Advanced
+            </MudText>
+            
+            <MudStack Spacing="1">
+                <MudButton Variant="Variant.Text" 
+                          Size="Size.Small" 
+                          StartIcon="@Icons.Material.Filled.ClearAll"
+                          OnClick="@(() => OnCommandClick.InvokeAsync("clean"))"
+                          FullWidth="true">
+                    Clean Canvas
+                </MudButton>
+                
+                <MudButton Variant="Variant.Text" 
+                          Size="Size.Small" 
+                          StartIcon="@Icons.Material.Filled.Refresh"
+                          OnClick="@(() => OnCommandClick.InvokeAsync("home"))"
+                          FullWidth="true">
+                    Reset Position
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    [Parameter] public EventCallback<string> OnCommandClick { get; set; }
+    
+    private bool isPenDown = true;
+    private int penSize = 2;
+    
+    private Dictionary<string, string> colors = new()
+    {
+        { "red", "#f44336" },
+        { "blue", "#2196f3" },
+        { "green", "#4caf50" },
+        { "yellow", "#ffeb3b" },
+        { "orange", "#ff9800" },
+        { "purple", "#9c27b0" },
+        { "pink", "#e91e63" },
+        { "black", "#000000" }
+    };
+
+    private async Task TogglePen(bool penDown)
+    {
+        isPenDown = penDown;
+        string command = isPenDown ? "pd" : "pu";
+        await OnCommandClick.InvokeAsync(command);
+    }
+
+    private async Task OnPenSizeChanged(int size)
+    {
+        penSize = size;
+        await OnCommandClick.InvokeAsync($"setpensize {penSize}");
+    }
+
+    private async Task SetColor(string colorName)
+    {
+        await OnCommandClick.InvokeAsync($"setcolor {colorName}");
+    }
+
+    private string GetColorStyle(string colorValue)
+    {
+        return $"color: {colorValue}; background: {colorValue}; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);";
+    }
+}

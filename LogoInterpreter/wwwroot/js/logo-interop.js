@@ -72,6 +72,10 @@ class LogoInterpreter {
         this.turtle = null;
         this.stack = [];
         this.repeatCount = 0;
+        this.currentProcedure = null;
+        this.procedureBody = [];
+        this.ifCondition = null;
+        this.lineNumber = 0;
     }
 
     setTurtle(turtle) {
@@ -88,15 +92,17 @@ class LogoInterpreter {
             .filter(line => line.length > 0 && !line.startsWith(';')); // Filter comments
 
         let output = '';
+        this.lineNumber = 0;
 
         for (const line of lines) {
+            this.lineNumber++;
             try {
                 const result = this.executeLine(line);
                 if (result && result.trim().length > 0) {
                     output += result + '\n';
                 }
             } catch (error) {
-                throw new Error(`Error in "${line}": ${error.message}`);
+                throw new Error(`Line ${this.lineNumber}: ${error.message}`);
             }
         }
 
@@ -104,6 +110,19 @@ class LogoInterpreter {
     }
 
     executeLine(line) {
+        // Handle procedure definition mode
+        if (this.currentProcedure) {
+            if (line.toLowerCase().trim() === 'end') {
+                this.procedures.get(this.currentProcedure).commands = [...this.procedureBody];
+                this.currentProcedure = null;
+                this.procedureBody = [];
+                return `Procedure defined`;
+            } else {
+                this.procedureBody.push(line);
+                return '';
+            }
+        }
+
         const tokens = this.tokenize(line);
         if (tokens.length === 0) return '';
 
@@ -129,11 +148,11 @@ class LogoInterpreter {
             case 'pu':
             case 'penup':
                 this.turtle.penUp();
-                break;
+                return '';
             case 'pd':
             case 'pendown':
                 this.turtle.penDown();
-                break;
+                return '';
 
             // Color and style
             case 'setcolor':
@@ -145,12 +164,14 @@ class LogoInterpreter {
             // Control structures
             case 'repeat':
                 return this.executeRepeat(args);
+            case 'if':
+                return this.executeIf(args);
 
             // Procedure definition
             case 'to':
                 return this.defineProcedure(args);
             case 'end':
-                return ''; // End of procedure definition
+                return ''; // Handled above
 
             // Variables
             case 'make':
@@ -159,21 +180,37 @@ class LogoInterpreter {
             // Utility commands
             case 'home':
                 this.turtle.home();
-                break;
+                return '';
             case 'clean':
                 this.turtle.clean();
-                break;
+                return '';
             case 'clearscreen':
             case 'cs':
                 this.turtle.clearScreen();
-                break;
+                return '';
+
+            // Shape commands
+            case 'circle':
+                return this.executeCircle(args);
+            case 'arc':
+                return this.executeArc(args);
 
             // Output commands
             case 'print':
             case 'pr':
                 return this.executePrint(args);
 
-            // Special variables
+            // Math functions
+            case 'random':
+                return this.executeRandom(args);
+            case 'sin':
+                return this.executeSin(args);
+            case 'cos':
+                return this.executeCos(args);
+            case 'sqrt':
+                return this.executeSqrt(args);
+
+            // Special variables and functions
             case 'repcount':
                 return this.repeatCount.toString();
 
@@ -185,12 +222,9 @@ class LogoInterpreter {
                     throw new Error(`Unknown command: ${command}`);
                 }
         }
-
-        return '';
     }
 
     tokenize(line) {
-        // Handle brackets and quotes properly
         const tokens = [];
         let current = '';
         let inQuotes = false;
@@ -228,6 +262,7 @@ class LogoInterpreter {
         return tokens;
     }
 
+    // Movement commands
     executeForward(args) {
         if (args.length === 0) throw new Error('FORWARD requires a distance');
         const distance = this.evaluateExpression(args[0]);
@@ -256,6 +291,7 @@ class LogoInterpreter {
         return '';
     }
 
+    // Style commands
     executeSetColor(args) {
         if (args.length === 0) throw new Error('SETCOLOR requires a color');
         const color = args[0].replace(/['"]/g, ''); // Remove quotes
@@ -270,23 +306,52 @@ class LogoInterpreter {
         return '';
     }
 
+    // Shape commands
+    executeCircle(args) {
+        if (args.length === 0) throw new Error('CIRCLE requires a radius');
+        const radius = this.evaluateExpression(args[0]);
+        this.turtle.circle(radius);
+        return '';
+    }
+
+    executeArc(args) {
+        if (args.length < 2) throw new Error('ARC requires angle and radius');
+        const angle = this.evaluateExpression(args[0]);
+        const radius = this.evaluateExpression(args[1]);
+        this.turtle.arc(angle, radius);
+        return '';
+    }
+
+    // Control structures
     executeRepeat(args) {
         if (args.length < 2) throw new Error('REPEAT requires count and commands');
 
         const count = this.evaluateExpression(args[0]);
         const commands = args.slice(1).join(' ');
-
-        // Remove brackets if present
         const cleanCommands = commands.replace(/^\[|\]$/g, '').trim();
 
+        const oldRepeatCount = this.repeatCount;
         for (let i = 1; i <= count; i++) {
             this.repeatCount = i;
             this.executeLine(cleanCommands);
         }
-        this.repeatCount = 0;
+        this.repeatCount = oldRepeatCount;
         return '';
     }
 
+    executeIf(args) {
+        if (args.length < 2) throw new Error('IF requires condition and commands');
+
+        const condition = this.evaluateExpression(args[0]);
+        if (condition) {
+            const commands = args.slice(1).join(' ');
+            const cleanCommands = commands.replace(/^\[|\]$/g, '').trim();
+            return this.executeLine(cleanCommands);
+        }
+        return '';
+    }
+
+    // Variables
     executeVarAssignment(args) {
         if (args.length < 2) throw new Error('MAKE requires variable name and value');
         const varName = args[0].replace(/^[":]/, ''); // Remove quotes or colon
@@ -295,21 +360,92 @@ class LogoInterpreter {
         return '';
     }
 
+    // Output
     executePrint(args) {
         if (args.length === 0) return '';
         const value = this.evaluateExpression(args.join(' '));
         return String(value);
     }
 
+    // Math functions
+    executeRandom(args) {
+        if (args.length === 0) throw new Error('RANDOM requires a maximum value');
+        const max = this.evaluateExpression(args[0]);
+        return Math.floor(Math.random() * max) + 1;
+    }
+
+    executeSin(args) {
+        if (args.length === 0) throw new Error('SIN requires an angle');
+        const angle = this.evaluateExpression(args[0]);
+        return Math.sin(angle * Math.PI / 180);
+    }
+
+    executeCos(args) {
+        if (args.length === 0) throw new Error('COS requires an angle');
+        const angle = this.evaluateExpression(args[0]);
+        return Math.cos(angle * Math.PI / 180);
+    }
+
+    executeSqrt(args) {
+        if (args.length === 0) throw new Error('SQRT requires a number');
+        const number = this.evaluateExpression(args[0]);
+        return Math.sqrt(number);
+    }
+
+    // Procedures
+    defineProcedure(args) {
+        if (args.length === 0) throw new Error('TO requires procedure name');
+        const name = args[0].toLowerCase();
+        const params = args.slice(1);
+        this.procedures.set(name, { params, commands: [] });
+        this.currentProcedure = name;
+        this.procedureBody = [];
+        return '';
+    }
+
+    executeProcedure(name, args) {
+        const procedure = this.procedures.get(name);
+        if (!procedure) throw new Error(`Procedure ${name} not found`);
+
+        // Save current variable state
+        const oldVariables = new Map(this.variables);
+
+        // Set parameter values
+        for (let i = 0; i < procedure.params.length; i++) {
+            if (i < args.length) {
+                const paramName = procedure.params[i].replace(/^:/, '');
+                this.variables.set(paramName, this.evaluateExpression(args[i]));
+            }
+        }
+
+        // Execute procedure commands
+        let output = '';
+        for (const command of procedure.commands) {
+            const result = this.executeLine(command);
+            if (result && result.trim().length > 0) {
+                output += result + '\n';
+            }
+        }
+
+        // Restore variable state
+        this.variables = oldVariables;
+
+        return output.trim();
+    }
+
     evaluateExpression(expr) {
+        if (expr === undefined || expr === null) return 0;
+
+        const strExpr = String(expr).trim();
+
         // Handle special keywords
-        if (expr.toLowerCase() === 'repcount') {
+        if (strExpr.toLowerCase() === 'repcount') {
             return this.repeatCount;
         }
 
         // Handle variables (starting with :)
-        if (expr.startsWith(':')) {
-            const varName = expr.substring(1);
+        if (strExpr.startsWith(':')) {
+            const varName = strExpr.substring(1);
             if (this.variables.has(varName)) {
                 return this.variables.get(varName);
             }
@@ -317,42 +453,51 @@ class LogoInterpreter {
         }
 
         // Handle quoted strings
-        if (expr.startsWith('"') && expr.endsWith('"')) {
-            return expr.slice(1, -1);
+        if (strExpr.startsWith('"') && strExpr.endsWith('"')) {
+            return strExpr.slice(1, -1);
         }
 
         // Handle numbers
-        if (!isNaN(expr)) {
-            return parseFloat(expr);
+        if (!isNaN(strExpr) && strExpr !== '') {
+            return parseFloat(strExpr);
         }
 
         // Handle simple math expressions
         try {
-            // Simple arithmetic operations only
-            if (/^[\d+\-*/(). ]+$/.test(expr)) {
-                return eval(expr);
+            // Only allow safe arithmetic operations
+            if (/^[\d+\-*/().\s]+$/.test(strExpr)) {
+                // Replace any unsafe patterns and evaluate
+                const safeExpr = strExpr.replace(/[^0-9+\-*/().\s]/g, '');
+                return Function('"use strict"; return (' + safeExpr + ')')();
             }
-        } catch {
-            // Fall through to return as string
+        } catch (e) {
+            // Fall through to return as string/number
         }
 
-        return expr; // Return as string if can't evaluate
-    }
+        // Handle boolean operations for IF statements
+        if (strExpr.includes('=') || strExpr.includes('>') || strExpr.includes('<')) {
+            try {
+                // Simple comparison operations
+                const comparison = strExpr.replace(/(\d+)\s*([><=]+)\s*(\d+)/, (match, left, op, right) => {
+                    const l = parseFloat(left);
+                    const r = parseFloat(right);
+                    switch (op) {
+                        case '=': case '==': return l === r;
+                        case '>': return l > r;
+                        case '<': return l < r;
+                        case '>=': return l >= r;
+                        case '<=': return l <= r;
+                        default: return false;
+                    }
+                });
+                return comparison === 'true';
+            } catch (e) {
+                return false;
+            }
+        }
 
-    defineProcedure(args) {
-        if (args.length === 0) throw new Error('TO requires procedure name');
-        const name = args[0].toLowerCase();
-        const params = args.slice(1);
-        this.procedures.set(name, { params, commands: [] });
-        return `Procedure ${name} defined`;
-    }
-
-    executeProcedure(name, args) {
-        const procedure = this.procedures.get(name);
-        if (!procedure) throw new Error(`Procedure ${name} not found`);
-
-        // Simple procedure execution (commands would be stored during definition)
-        return `Executing procedure: ${name}`;
+        // Return as-is for other cases
+        return strExpr;
     }
 }
 
@@ -417,7 +562,7 @@ class CanvasTurtle {
     }
 
     setColor(color) {
-        // Handle common color names
+        // Handle common color names and hex values
         const colorMap = {
             'red': '#FF0000',
             'green': '#00FF00',
@@ -425,7 +570,8 @@ class CanvasTurtle {
             'yellow': '#FFFF00',
             'orange': '#FFA500',
             'purple': '#800080',
-            'violet': '#800080',
+            'pink': '#FFC0CB',
+            'brown': '#A52A2A',
             'black': '#000000',
             'white': '#FFFFFF',
             'gray': '#808080',
@@ -434,11 +580,38 @@ class CanvasTurtle {
 
         this.color = colorMap[color.toLowerCase()] || color;
         this.ctx.strokeStyle = this.color;
+        this.ctx.fillStyle = this.color;
     }
 
     setPenSize(size) {
         this.penSize = Math.max(1, size);
         this.ctx.lineWidth = this.penSize;
+    }
+
+    circle(radius) {
+        if (this.penIsDown) {
+            this.ctx.beginPath();
+            this.ctx.arc(this.x, this.y, Math.abs(radius), 0, 2 * Math.PI);
+            this.ctx.stroke();
+        }
+    }
+
+    arc(angle, radius) {
+        if (this.penIsDown) {
+            const startAngle = (this.angle - 90) * Math.PI / 180;
+            const endAngle = startAngle + (angle * Math.PI / 180);
+
+            this.ctx.beginPath();
+            this.ctx.arc(this.x, this.y, Math.abs(radius), startAngle, endAngle);
+            this.ctx.stroke();
+        }
+
+        // Update turtle position and angle
+        const radians = (angle * Math.PI / 180);
+        this.x += radius * Math.cos(radians);
+        this.y += radius * Math.sin(radians);
+        this.angle += angle;
+        this.angle = this.angle % 360;
     }
 
     home() {
@@ -458,15 +631,3 @@ class CanvasTurtle {
         this.home();
     }
 }
-
-// Helper function for scrolling
-window.scrollToBottom = function (elementId) {
-    try {
-        const element = document.getElementById(elementId);
-        if (element) {
-            element.scrollTop = element.scrollHeight;
-        }
-    } catch (error) {
-        console.warn('Could not scroll element:', error);
-    }
-};

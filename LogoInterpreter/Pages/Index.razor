@@ -1,209 +1,250 @@
 ﻿@page "/"
+@using Microsoft.JSInterop
 @inject IJSRuntime JSRuntime
 @implements IAsyncDisposable
 
-<PageTitle>Logo Interpreter</PageTitle>
+<MudGrid Spacing="2" Style="height: 100%; margin: 0;">
+    <!-- Left Panel - Tools -->
+    <MudItem xs="12" md="4" lg="3">
+        <MudPaper Elevation="2" Style="height: 100%; overflow: hidden;">
+            <MudTabs Elevation="0" Rounded="true" PanelClass="pa-4" Style="height: 100%;">
+                <MudTabPanel Text="Examples" Icon="@Icons.Material.Filled.Code">
+                    <MudStack Spacing="2">
+                        @foreach (var example in logoExamples)
+                        {
+                            <MudCard Style="cursor: pointer;" @onclick="@(() => LoadExample(example.Code))">
+                                <MudCardContent Class="pa-3">
+                                    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                        <MudText Typo="Typo.subtitle2" Color="Color.Primary">@example.Title</MudText>
+                                        <MudIcon Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" />
+                                    </MudStack>
+                                    <MudText Typo="Typo.caption" Class="mt-2" Style="font-family: 'Courier New', monospace; background: #f5f5f5; padding: 8px; border-radius: 4px;">
+                                        @example.Code
+                                    </MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        }
+                    </MudStack>
+                </MudTabPanel>
+                
+                <MudTabPanel Text="Reference" Icon="@Icons.Material.Filled.Help">
+                    <MudStack Spacing="3">
+                        <MudExpansionPanels Elevation="0">
+                            <MudExpansionPanel Text="Movement Commands">
+                                <div style="padding: 16px;">
+                                    <MudStack Spacing="1">
+                                        <MudText Typo="Typo.body2"><strong>fd/forward [distance]</strong> - Move forward</MudText>
+                                        <MudText Typo="Typo.body2"><strong>bk/backward [distance]</strong> - Move backward</MudText>
+                                        <MudText Typo="Typo.body2"><strong>rt/right [angle]</strong> - Turn right</MudText>
+                                        <MudText Typo="Typo.body2"><strong>lt/left [angle]</strong> - Turn left</MudText>
+                                    </MudStack>
+                                </div>
+                            </MudExpansionPanel>
+                            
+                            <MudExpansionPanel Text="Pen Control">
+                                <div style="padding: 16px;">
+                                    <MudStack Spacing="1">
+                                        <MudText Typo="Typo.body2"><strong>pu/penup</strong> - Lift pen</MudText>
+                                        <MudText Typo="Typo.body2"><strong>pd/pendown</strong> - Lower pen</MudText>
+                                        <MudText Typo="Typo.body2"><strong>setcolor [color]</strong> - Set pen color</MudText>
+                                        <MudText Typo="Typo.body2"><strong>setpensize [size]</strong> - Set pen width</MudText>
+                                    </MudStack>
+                                </div>
+                            </MudExpansionPanel>
+                            
+                            <MudExpansionPanel Text="Control Structures">
+                                <div style="padding: 16px;">
+                                    <MudStack Spacing="1">
+                                        <MudText Typo="Typo.body2"><strong>repeat [count] [commands]</strong> - Repeat commands</MudText>
+                                        <MudText Typo="Typo.body2"><strong>if [condition] [commands]</strong> - Conditional execution</MudText>
+                                        <MudText Typo="Typo.body2"><strong>home</strong> - Return to center</MudText>
+                                        <MudText Typo="Typo.body2"><strong>clean</strong> - Clear canvas</MudText>
+                                    </MudStack>
+                                </div>
+                            </MudExpansionPanel>
+                        </MudExpansionPanels>
+                    </MudStack>
+                </MudTabPanel>
+                
+                <MudTabPanel Text="History" Icon="@Icons.Material.Filled.History">
+                    <MudStack Spacing="2">
+                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.h6">Command History</MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.Clear" 
+                                          Size="Size.Small" 
+                                          OnClick="ClearHistory" 
+                                          Title="Clear History" />
+                        </MudStack>
+                        
+                        @if (commandHistory.Any())
+                        {
+                            <MudStack Spacing="1">
+                                @foreach (var command in commandHistory.TakeLast(20).Reverse())
+                                {
+                                    <MudChip T="string" Size="Size.Small" 
+                                            Color="Color.Default" 
+                                            Variant="Variant.Outlined"
+                                            OnClick="@(() => LoadCommand(command))"
+                                            Style="cursor: pointer; font-family: 'Courier New', monospace;">
+                                        @command
+                                    </MudChip>
+                                }
+                            </MudStack>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Info" Variant="Variant.Text">
+                                Command history will appear here
+                            </MudAlert>
+                        }
+                    </MudStack>
+                </MudTabPanel>
+                
+                <MudTabPanel Text="Tools" Icon="@Icons.Material.Filled.Build">
+                    <LogoToolbar OnCommandClick="HandleToolbarCommand" />
+                </MudTabPanel>
+            </MudTabs>
+        </MudPaper>
+    </MudItem>
 
-<div class="single">
-    <div id="topbar" class="panel">
-        <h1>Logo Interpreter</h1>
-        <p id="topbar-links">
-            <a href="#" @onclick="ShowTests" @onclick:preventDefault="true">Tests</a>
-            | <a href="https://github.com/inexorabletash/jslogo" target="_blank">Source</a>
-            | <a href="#" @onclick="ShowLanguageReference" @onclick:preventDefault="true">Language Reference</a>
-        </p>
-    </div>
-
-    <div id="content-container">
-        <div id="display" class="panel">
-            <div id="overlay"></div>
-            <canvas id="sandbox" width="500" height="350"></canvas>
-
-            <div id="input" class="panel">
-                <div class="single-line">
-                    <textarea @ref="inputElement" @bind="currentInput" @onkeydown="HandleKeyDown" placeholder="Type Logo commands here..."></textarea>
-                    <button @onclick="ExecuteCommand" class="btn btn-primary">Run</button>
-                    <button @onclick="ClearScreen" class="btn btn-secondary">Clear</button>
+    <!-- Right Panel - Canvas and Editor -->
+    <MudItem xs="12" md="8" lg="9">
+        <MudStack Spacing="2" Style="height: 100%;">
+            <!-- Canvas Section -->
+            <MudPaper Elevation="2" Style="flex: 1; display: flex; flex-direction: column; min-height: 400px;">
+                <MudToolBar Dense="true">
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@Icons.Material.Filled.Brush" />
+                        <MudText Typo="Typo.h6">Canvas</MudText>
+                    </MudStack>
+                    <MudSpacer />
+                    <MudIconButton Icon="@Icons.Material.Filled.Clear" 
+                                  OnClick="ClearScreen" 
+                                  Title="Clear Canvas"
+                                  Size="Size.Small" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Download" 
+                                  Title="Save Canvas"
+                                  Size="Size.Small" />
+                </MudToolBar>
+                
+                <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);">
+                    <canvas id="sandbox" 
+                            width="800" 
+                            height="600" 
+                            style="border: 2px solid #ddd; border-radius: 8px; background: white; max-width: 100%; max-height: 100%;"></canvas>
                 </div>
+                
+                <MudGrid AlignItems="Center" Class="pa-2">
+                    <MudItem xs="6">
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                            <MudIcon Icon="@Icons.Material.Filled.Pets" Color="Color.Primary" />
+                            <MudText Typo="Typo.caption">Turtle Graphics</MudText>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="6" Class="text-right">
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">
+                            <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" />
+                            Ready
+                        </MudChip>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
 
-                @if (isMultiLine)
-                {
-                    <div class="multi-line">
-                        <textarea @ref="multiLineElement" @bind="multiLineInput" rows="10" cols="60"></textarea>
-                        <div class="button-group">
-                            <button @onclick="ExecuteMultiLine" class="btn btn-primary">Run All</button>
-                            <button @onclick="ToggleSingleLine" class="btn btn-secondary">Single Line</button>
-                        </div>
-                    </div>
-                }
-                else
-                {
-                    <button @onclick="ToggleMultiLine" class="btn btn-outline-secondary btn-sm">Multi-line</button>
-                }
-            </div>
+            <!-- Editor Section -->
+            <MudPaper Elevation="2" Style="min-height: 200px;">
+                <MudTabs Elevation="0" Rounded="false" PanelClass="pa-4">
+                    <MudTabPanel Text="Command Line" Icon="@Icons.Material.Filled.Terminal">
+                        <MudStack Spacing="3">
+                            <MudTextField @bind-Value="currentInput"
+                                        @ref="commandInputRef"
+                                        @onkeydown="HandleKeyDown"
+                                        Label="Logo Command"
+                                        Variant="Variant.Outlined"
+                                        Adornment="Adornment.Start"
+                                        AdornmentIcon="@Icons.Material.Filled.ChevronRight"
+                                        AdornmentColor="Color.Primary"
+                                        Placeholder="Enter Logo command (e.g., fd 50, rt 90)"
+                                        HelperText="Press Enter to execute, Up arrow for history"
+                                        Style="font-family: 'Courier New', monospace;" />
+                            
+                            <MudButton Variant="Variant.Filled" 
+                                      Color="Color.Primary" 
+                                      StartIcon="@Icons.Material.Filled.PlayArrow"
+                                      OnClick="ExecuteCommand"
+                                      FullWidth="true">
+                                Execute Command
+                            </MudButton>
+                        </MudStack>
+                    </MudTabPanel>
+                    
+                    <MudTabPanel Text="Multi-Line Editor" Icon="@Icons.Material.Filled.Code">
+                        <MudStack Spacing="3">
+                            <MudTextField @bind-Value="multiLineInput"
+                                        Lines="8"
+                                        Label="Logo Program"
+                                        Variant="Variant.Outlined"
+                                        Placeholder="Enter multiple Logo commands..."
+                                        HelperText="Write multiple commands, procedures, and complex programs"
+                                        Style="font-family: 'Courier New', monospace;" />
+                            
+                            <MudButton Variant="Variant.Filled" 
+                                      Color="Color.Primary" 
+                                      StartIcon="@Icons.Material.Filled.PlayArrow"
+                                      OnClick="ExecuteMultiLineCommand"
+                                      FullWidth="true">
+                                Run Program
+                            </MudButton>
+                        </MudStack>
+                    </MudTabPanel>
+                </MudTabs>
+            </MudPaper>
 
-            <div id="output" class="panel">
-                @foreach (var line in outputLines)
-                {
-                    <div class="output-line @(line.IsError ? "error" : "")">@line.Text</div>
-                }
-            </div>
-        </div>
-
-        <div id="sidebar-container">
-            <div id="sidebar-buttons" class="panel">
-                <ul>
-                    <li>
-                        <a href="#" @onclick="() => ShowSidebarContent(SidebarContent.Reference)" @onclick:preventDefault="true"
-                           class="@(currentSidebar == SidebarContent.Reference ? "active" : "")">Reference</a>
-                    </li>
-                    <li>
-                        <a href="#" @onclick="() => ShowSidebarContent(SidebarContent.Library)" @onclick:preventDefault="true"
-                           class="@(currentSidebar == SidebarContent.Library ? "active" : "")">Library</a>
-                    </li>
-                    <li>
-                        <a href="#" @onclick="() => ShowSidebarContent(SidebarContent.History)" @onclick:preventDefault="true"
-                           class="@(currentSidebar == SidebarContent.History ? "active" : "")">History</a>
-                    </li>
-                    <li>
-                        <a href="#" @onclick="() => ShowSidebarContent(SidebarContent.Examples)" @onclick:preventDefault="true"
-                           class="@(currentSidebar == SidebarContent.Examples ? "active" : "")">Examples</a>
-                    </li>
-                    <li>
-                        <a href="#" @onclick="() => ShowSidebarContent(SidebarContent.Links)" @onclick:preventDefault="true"
-                           class="@(currentSidebar == SidebarContent.Links ? "active" : "")">Links</a>
-                    </li>
-                </ul>
-            </div>
-
-            <div id="sidebar" class="panel">
-                @switch (currentSidebar)
-                {
-                    case SidebarContent.Reference:
-                        <div class="sidebar-content">
-                            <h3>Logo Language Reference</h3>
-                            <div class="reference-content">
-                                <h4>Movement Commands</h4>
-                                <ul>
-                                    <li><strong>fd/forward [distance]</strong> - Move turtle forward</li>
-                                    <li><strong>bk/backward [distance]</strong> - Move turtle backward</li>
-                                    <li><strong>rt/right [angle]</strong> - Turn turtle right</li>
-                                    <li><strong>lt/left [angle]</strong> - Turn turtle left</li>
-                                </ul>
-
-                                <h4>Pen Commands</h4>
-                                <ul>
-                                    <li><strong>pu/penup</strong> - Lift pen (don't draw)</li>
-                                    <li><strong>pd/pendown</strong> - Put pen down (draw)</li>
-                                    <li><strong>setcolor [color]</strong> - Set pen color</li>
-                                    <li><strong>setpensize [size]</strong> - Set pen width</li>
-                                </ul>
-
-                                <h4>Control Commands</h4>
-                                <ul>
-                                    <li><strong>repeat [count] [commands]</strong> - Repeat commands</li>
-                                    <li><strong>home</strong> - Return to center</li>
-                                    <li><strong>clean</strong> - Clear canvas</li>
-                                    <li><strong>clearscreen/cs</strong> - Clear and home</li>
-                                </ul>
-
-                                <h4>Colors</h4>
-                                <p>red, green, blue, yellow, orange, purple, black, white, gray</p>
-                            </div>
-                        </div>
-                        break;
-
-                    case SidebarContent.Library:
-                        <div class="sidebar-content">
-                            <div class="sidebar-header">
-                                <button @onclick="ClearLibrary" class="btn btn-sm btn-outline-danger">Clear Library</button>
-                            </div>
-                            <div class="snippets">
-                                @foreach (var procedure in libraryProcedures)
-                                {
-                                    <div class="snippet" @onclick="() => LoadProcedure(procedure)">
-                                        <pre>@procedure</pre>
-                                    </div>
-                                }
-                                @if (!libraryProcedures.Any())
-                                {
-                                    <div class="placeholder">Defined procedures will appear here.</div>
-                                }
-                            </div>
-                        </div>
-                        break;
-
-                    case SidebarContent.History:
-                        <div class="sidebar-content">
-                            <div class="sidebar-header">
-                                <button @onclick="ClearHistory" class="btn btn-sm btn-outline-danger">Clear History</button>
-                            </div>
-                            <div class="snippets">
-                                @foreach (var command in commandHistory)
-                                {
-                                    <div class="snippet" @onclick="() => LoadCommand(command)">
-                                        <pre>@command</pre>
-                                    </div>
-                                }
-                                @if (!commandHistory.Any())
-                                {
-                                    <div class="placeholder">Commands you enter will appear here so you can find, modify, and re-run them.</div>
-                                }
-                            </div>
-                        </div>
-                        break;
-
-                    case SidebarContent.Examples:
-                        <div class="sidebar-content">
-                            <div class="snippets">
-                                @foreach (var example in logoExamples)
-                                {
-                                    <div class="snippet" @onclick="() => LoadExample(example.Code)">
-                                        <h4>@example.Title</h4>
-                                        <pre>@example.Code</pre>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                        break;
-
-                    case SidebarContent.Links:
-                        <div class="sidebar-content">
-                            <ul class="links-list">
-                                <li><a href="https://en.wikipedia.org/wiki/Logo_(programming_language)" target="_blank">Logo</a> according to Wikipedia</li>
-                                <li><a href="https://utdallas.edu/~veerasam/logo/" target="_blank">UT Dallas LOGO Workshop</a> - fun examples to try</li>
-                                <li><a href="http://el.media.mit.edu/logo-foundation/" target="_blank">The Logo Foundation</a> with links to learning resources</li>
-                                <li><a href="https://www.cs.berkeley.edu/~bh/logo.html" target="_blank">Berkeley Logo (UCBLogo)</a> is a well respected interpreter</li>
-                            </ul>
-                        </div>
-                        break;
-                }
-            </div>
-        </div>
-    </div>
-</div>
+            <!-- Output Section -->
+            <MudPaper Elevation="2" Style="min-height: 150px; max-height: 200px;">
+                <MudToolBar Dense="true">
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@Icons.Material.Filled.Terminal" />
+                        <MudText Typo="Typo.h6">Output</MudText>
+                    </MudStack>
+                    <MudSpacer />
+                    <MudIconButton Icon="@Icons.Material.Filled.Clear" 
+                                  OnClick="ClearOutput" 
+                                  Title="Clear Output"
+                                  Size="Size.Small" />
+                </MudToolBar>
+                
+                <div style="height: calc(100% - 48px); overflow-y: auto; padding: 16px; font-family: 'Courier New', monospace; font-size: 0.875rem;">
+                    @if (outputLines.Any())
+                    {
+                        @foreach (var line in outputLines.TakeLast(50))
+                        {
+                            <MudAlert Severity="@(line.IsError ? Severity.Error : Severity.Success)" 
+                                     Variant="Variant.Text" 
+                                     Dense="true" 
+                                     Class="mb-1">
+                                @line.Text
+                            </MudAlert>
+                        }
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Text">
+                            Command output will appear here
+                        </MudAlert>
+                    }
+                </div>
+            </MudPaper>
+        </MudStack>
+    </MudItem>
+</MudGrid>
 
 @code {
-    private ElementReference inputElement;
-    private ElementReference multiLineElement;
+    private MudTextField<string> commandInputRef = null!;
     private string currentInput = "";
     private string multiLineInput = "";
-    private bool isMultiLine = false;
     private List<OutputLine> outputLines = new();
     private List<string> commandHistory = new();
-    private List<string> libraryProcedures = new();
-    private SidebarContent currentSidebar = SidebarContent.Examples;
-
     private IJSObjectReference? logoModule;
-
-    private enum SidebarContent
-    {
-        Reference,
-        Library,
-        History,
-        Examples,
-        Links
-    }
 
     private class OutputLine
     {
@@ -221,12 +262,12 @@
     {
         new() { Title = "Simple Square", Code = "repeat 4 [ fd 100 rt 90 ]" },
         new() { Title = "Colorful Star", Code = "setcolor red\nrepeat 5 [ fd 100 rt 144 ]" },
-        new() { Title = "Square Pattern", Code = "repeat 36 [ fd 50 rt 10 ]" },
-        new() { Title = "Spiral", Code = "repeat 100 [ fd repcount rt 91 ]" },
-        new() { Title = "Flower Pattern", Code = "setcolor blue\nrepeat 36 [ fd 50 rt 170 ]" },
-        new() { Title = "Octagon", Code = "repeat 8 [ fd 60 rt 45 ]" },
-        new() { Title = "Triangle", Code = "repeat 3 [ fd 100 rt 120 ]" },
-        new() { Title = "Circle Pattern", Code = "repeat 72 [ fd 5 rt 5 ]" }
+        new() { Title = "Spiral Pattern", Code = "repeat 100 [ fd repcount rt 91 ]" },
+        new() { Title = "Flower Design", Code = "setcolor blue\nrepeat 36 [ fd 50 rt 170 ]" },
+        new() { Title = "Perfect Circle", Code = "repeat 360 [ fd 1 rt 1 ]" },
+        new() { Title = "Rainbow Square", Code = "repeat 4 [ setcolor random 10 fd 100 rt 90 ]" },
+        new() { Title = "Nested Triangles", Code = "repeat 3 [ repeat 3 [ fd 50 rt 120 ] rt 120 ]" },
+        new() { Title = "Sine Wave", Code = "repeat 360 [ fd 2 lt sin repcount ]" }
     };
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -236,7 +277,10 @@
             try
             {
                 await JSRuntime.InvokeVoidAsync("logoInterop.initializeLogo");
-                await inputElement.FocusAsync();
+                if (commandInputRef != null)
+                {
+                    await commandInputRef.FocusAsync();
+                }
             }
             catch (Exception ex)
             {
@@ -248,92 +292,84 @@
 
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && !e.ShiftKey && !isMultiLine)
+        if (e.Key == "Enter")
         {
             await ExecuteCommand();
+        }
+        else if (e.Key == "ArrowUp" && commandHistory.Any())
+        {
+            currentInput = commandHistory.LastOrDefault() ?? "";
+            StateHasChanged();
         }
     }
 
     private async Task ExecuteCommand()
     {
-        var command = currentInput.Trim();
-        if (string.IsNullOrEmpty(command)) return;
-
-        commandHistory.Insert(0, command);
-        if (commandHistory.Count > 100)
+        await ExecuteCommandInternal(currentInput);
+        currentInput = "";
+        if (commandInputRef != null)
         {
-            commandHistory.RemoveAt(commandHistory.Count - 1);
+            await commandInputRef.FocusAsync();
+        }
+    }
+
+    private async Task ExecuteMultiLineCommand()
+    {
+        await ExecuteCommandInternal(multiLineInput);
+        multiLineInput = "";
+    }
+
+    private async Task ExecuteCommandInternal(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command))
+            return;
+
+        // Add to history
+        if (!commandHistory.Contains(command))
+        {
+            commandHistory.Add(command);
+            if (commandHistory.Count > 100)
+            {
+                commandHistory.RemoveAt(0);
+            }
         }
 
         try
         {
             var result = await JSRuntime.InvokeAsync<string>("logoInterop.executeCommand", command);
-            if (!string.IsNullOrEmpty(result))
+            
+            if (!string.IsNullOrWhiteSpace(result))
             {
-                outputLines.Add(new OutputLine { Text = result });
+                outputLines.Add(new OutputLine { Text = result, IsError = false });
             }
+            
+            outputLines.Add(new OutputLine { Text = $"✓ Executed: {command}", IsError = false });
         }
         catch (Exception ex)
         {
-            outputLines.Add(new OutputLine { Text = ex.Message, IsError = true });
+            outputLines.Add(new OutputLine { Text = $"✗ Error: {ex.Message}", IsError = true });
         }
 
-        currentInput = "";
-        StateHasChanged();
-
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("scrollToBottom", "output");
-        }
-        catch
-        {
-            // Ignore scrolling errors
-        }
-    }
-
-    private async Task ExecuteMultiLine()
-    {
-        var commands = multiLineInput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        foreach (var command in commands)
-        {
-            currentInput = command.Trim();
-            if (!string.IsNullOrEmpty(currentInput))
-            {
-                await ExecuteCommand();
-            }
-        }
-        multiLineInput = "";
-    }
-
-    private void ToggleMultiLine()
-    {
-        isMultiLine = true;
-        StateHasChanged();
-    }
-
-    private void ToggleSingleLine()
-    {
-        isMultiLine = false;
         StateHasChanged();
     }
 
     private async Task ClearScreen()
     {
-        outputLines.Clear();
         try
         {
             await JSRuntime.InvokeVoidAsync("logoInterop.clearCanvas");
+            outputLines.Add(new OutputLine { Text = "✓ Canvas cleared", IsError = false });
         }
         catch (Exception ex)
         {
-            outputLines.Add(new OutputLine { Text = $"Clear error: {ex.Message}", IsError = true });
+            outputLines.Add(new OutputLine { Text = $"✗ Clear error: {ex.Message}", IsError = true });
         }
         StateHasChanged();
     }
 
-    private void ShowSidebarContent(SidebarContent content)
+    private void ClearOutput()
     {
-        currentSidebar = content;
+        outputLines.Clear();
         StateHasChanged();
     }
 
@@ -343,30 +379,15 @@
         StateHasChanged();
     }
 
-    private void LoadProcedure(string procedure)
-    {
-        if (isMultiLine)
-        {
-            multiLineInput = procedure;
-        }
-        else
-        {
-            ToggleMultiLine();
-            multiLineInput = procedure;
-        }
-        StateHasChanged();
-    }
-
     private void LoadExample(string example)
     {
-        if (isMultiLine)
+        if (example.Contains('\n'))
         {
             multiLineInput = example;
         }
         else
         {
-            ToggleMultiLine();
-            multiLineInput = example;
+            currentInput = example;
         }
         StateHasChanged();
     }
@@ -377,22 +398,10 @@
         StateHasChanged();
     }
 
-    private void ClearLibrary()
+    private async Task HandleToolbarCommand(string command)
     {
-        libraryProcedures.Clear();
-        StateHasChanged();
-    }
-
-    private void ShowTests()
-    {
-        outputLines.Add(new OutputLine { Text = "Tests functionality not implemented yet." });
-        StateHasChanged();
-    }
-
-    private void ShowLanguageReference()
-    {
-        currentSidebar = SidebarContent.Reference;
-        StateHasChanged();
+        currentInput = command;
+        await ExecuteCommand();
     }
 
     public async ValueTask DisposeAsync()
